@@ -669,6 +669,17 @@
     }
   }
 
+  // Some teams have additional ordering preferences applied after shuffling.
+  function applyTeamPreferences(team, order) {
+    if (team === "ELEVATE") {
+      const i = order.indexOf("Reagan");
+      if (i !== -1 && i !== 3 && order.length > 3) {
+        [order[i], order[3]] = [order[3], order[i]];
+      }
+    }
+    return order;
+  }
+
   function startRound() {
     let order;
     if (state.team === "CUSTOM") {
@@ -678,6 +689,7 @@
     } else {
       const blocked = TEAMS[state.team]?.blockFirst;
       order = blocked ? shuffleAvoidingFirst(state.members, blocked) : shuffle(state.members);
+      order = applyTeamPreferences(state.team, order);
     }
     state.members = order;
     state.colors = assignRandomColors(order);
