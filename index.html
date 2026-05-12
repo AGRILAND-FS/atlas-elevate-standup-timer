@@ -40,6 +40,37 @@
     letter-spacing: 0.15em;
     line-height: 1.5;
   }
+  .names-toggle {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 3rem;
+  }
+  .name-toggle {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(0.95rem, 1.8vw, 1.4rem);
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    padding: 0.5rem 1rem;
+    border: 2px solid currentColor;
+    background: transparent;
+    color: var(--name-color, #fff);
+    text-shadow: 0 0 12px currentColor;
+    border-radius: 4px;
+    cursor: pointer;
+    min-width: 0;
+    text-transform: uppercase;
+    transition: color 0.15s, border-color 0.15s, text-shadow 0.15s, background 0.15s, transform 0.1s;
+  }
+  .name-toggle:hover { background: rgba(255,255,255,0.06); box-shadow: none; }
+  .name-toggle:active { transform: scale(0.96); }
+  .name-toggle.off {
+    color: #777;
+    border-color: #444;
+    text-shadow: none;
+  }
+  .name-toggle.off:hover { background: rgba(255,255,255,0.04); color: #999; }
 
   button {
     font-family: 'Orbitron', sans-serif;
@@ -356,7 +387,7 @@
     "ELEVATE":      { color: "#7FDBFF", blockFirst: "Brian",            members: ["Brian", "Mary", "Amber", "Lori", "Jeremy", "Reagan", "Jen"], flexLast: { name: "Jen", maxSeconds: 5 * 60 } },
     "MARKETING":    { color: "#FF6B6B", blockFirst: "Tony",             members: ["Jill", "Ashley", "Adam", "Christine", "Tony"] },
     "ENERGY":       { color: "#FF7A1A", blockFirst: "Nicole",           members: ["Nicole", "Jessica", "Trina", "Heather", "Jeremy"] },
-    "PROJECT MGMT": { color: "#DFFF00", blockFirst: "Mark Christensen", members: ["Jeremy Gray", "Mark Christensen", "Nate Katzer"] },
+    "PROJECT MGMT": { color: "#DFFF00", blockFirst: "Mark Christensen", members: ["Jeremy Gray", "Mark Christensen", "Nate Katzer", "Jen Ohrt"], flexLast: { name: "Jen Ohrt", maxSeconds: 5 * 60 } },
   };
   const CUSTOM_COLOR = "#C0C0C0";
 
@@ -398,6 +429,8 @@
     customDraft: "",       // remembered textarea content
     returnTo: null,        // screen to return to from leaderboard
     currentAllotted: 0,    // allotted seconds for the person currently up
+    enabled: {},           // { name: bool } — toggle state on the start screen
+    playOrder: [],         // shuffled, filtered-by-enabled order for the current round
   };
 
   function shuffle(arr) {
@@ -559,8 +592,20 @@
     state.team = teamName;
     state.members = TEAMS[teamName].members.slice();
     state.secondsPerPerson = PRESET_SECONDS;
+    initToggleStateAndColors();
     state.screen = "start";
     render();
+  }
+
+  // Assign random colors to all members and set default enabled state.
+  // Flex-last member (e.g. Jen) starts off; everyone else starts on.
+  function initToggleStateAndColors() {
+    state.colors = assignRandomColors(state.members);
+    const flexName = state.team !== "CUSTOM" ? TEAMS[state.team]?.flexLast?.name : null;
+    state.enabled = {};
+    state.members.forEach(name => {
+      state.enabled[name] = (name !== flexName);
+    });
   }
 
   // ---------- Configure (custom) ----------
@@ -632,6 +677,7 @@
       state.team = "CUSTOM";
       state.members = names;
       state.secondsPerPerson = customSecondsPerPerson(names.length);
+      initToggleStateAndColors();
       state.screen = "start";
       render();
     });
@@ -639,10 +685,11 @@
 
   function totalLabelForTeam() {
     const flex = state.team !== "CUSTOM" ? TEAMS[state.team]?.flexLast : null;
-    // For flex teams the regulars define the total budget; flex person draws from their saved time.
-    const baseCount = flex ? state.members.length - 1 : state.members.length;
-    const base = baseCount * state.secondsPerPerson;
-    return flex ? `up to ${formatTime(base)} total` : `${formatTime(base)} total`;
+    const enabledMembers = state.members.filter(n => state.enabled[n] !== false);
+    const flexOn = flex && enabledMembers.includes(flex.name);
+    const regularCount = flexOn ? enabledMembers.length - 1 : enabledMembers.length;
+    const base = Math.max(0, regularCount) * state.secondsPerPerson;
+    return flexOn ? `up to ${formatTime(base)} total` : `${formatTime(base)} total`;
   }
 
   // ---------- Start ----------
@@ -650,20 +697,37 @@
     const totalMin = totalLabelForTeam();
     const c = teamColor();
     const isPreset = state.team && state.team !== "CUSTOM";
+
+    const toggles = alphabetized(state.members).map(name => {
+      const on = state.enabled[name] !== false;
+      const color = state.colors[name] || "#fff";
+      return `<button class="name-toggle ${on ? "" : "off"}" data-name="${name}" style="--name-color:${color}">${name}</button>`;
+    }).join("");
+
+    const enabledCount = state.members.filter(n => state.enabled[n] !== false).length;
+
     const el = document.createElement("div");
     el.className = "start-screen";
     el.innerHTML = `
       <h1 style="color:${c}; text-shadow: 0 0 30px ${c};">${state.team}</h1>
       <p>${formatTime(state.secondsPerPerson)} per person · ${totalMin}</p>
-      <div class="names-preview">${alphabetized(state.members).join(" · ")}</div>
+      <div class="names-toggle">${toggles}</div>
       <div class="btn-row">
         <button class="btn-back" id="backBtn">Back</button>
         <button class="ghost">Pause</button>
-        <button class="btn-done" id="startBtn">Start</button>
+        <button class="btn-done" id="startBtn"${enabledCount === 0 ? " disabled" : ""}>Start</button>
       </div>
       ${isPreset ? `<button class="leaderboard-link" id="leaderboardLink">🏆 ${state.team} Leaderboard</button>` : ""}
     `;
     app.appendChild(el);
+
+    el.querySelectorAll(".name-toggle").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const name = btn.dataset.name;
+        state.enabled[name] = !(state.enabled[name] !== false);
+        render();
+      });
+    });
 
     document.getElementById("startBtn").addEventListener("click", startRound);
     document.getElementById("backBtn").addEventListener("click", () => {
@@ -699,28 +763,32 @@
   }
 
   function startRound() {
+    const active = state.members.filter(n => state.enabled[n] !== false);
+    if (active.length === 0) return;
+
     let order;
     if (state.team === "CUSTOM") {
-      const first = state.members[0];
-      const last = state.members[state.members.length - 1];
-      order = shuffleCustomConstrained(state.members, first, last);
+      // Constrain by the typed input order, but only for those who are still enabled.
+      const typedActive = state.members.filter(n => active.includes(n));
+      const first = typedActive[0];
+      const last = typedActive[typedActive.length - 1];
+      order = shuffleCustomConstrained(active, first, last);
     } else {
       const blocked = TEAMS[state.team]?.blockFirst;
-      order = blocked ? shuffleAvoidingFirst(state.members, blocked) : shuffle(state.members);
+      order = blocked ? shuffleAvoidingFirst(active, blocked) : shuffle(active);
       order = applyTeamPreferences(state.team, order);
     }
-    state.members = order;
-    state.colors = assignRandomColors(order);
+    state.playOrder = order;
     state.currentIndex = 0;
     state.results = [];
     beginPerson();
   }
 
   function beginPerson() {
-    const name = state.members[state.currentIndex];
+    const name = state.playOrder[state.currentIndex];
     const flex = TEAMS[state.team]?.flexLast;
     const isFlex = flex
-      && state.currentIndex === state.members.length - 1
+      && state.currentIndex === state.playOrder.length - 1
       && name === flex.name;
 
     let allotted = state.secondsPerPerson;
@@ -753,7 +821,7 @@
     el.innerHTML = `
       <h1 style="color:${c}; text-shadow: 0 0 30px ${c};">${state.team}</h1>
       <p>${formatTime(state.secondsPerPerson)} per person · ${totalMin}</p>
-      <div class="names-preview">${alphabetized(state.members).join(" · ")}</div>
+      <div class="names-preview">${alphabetized(state.playOrder).join(" · ")}</div>
       <div class="btn-row">
         <button class="ghost">+1 Minute</button>
         <button class="ghost">Pause</button>
@@ -774,7 +842,7 @@
 
   // ---------- Flash ----------
   function renderFlash() {
-    const name = state.members[state.currentIndex];
+    const name = state.playOrder[state.currentIndex];
     const color = state.colors[name] || "#fff";
     const el = document.createElement("div");
     el.className = "flash-screen";
@@ -784,7 +852,7 @@
 
   // ---------- Timer ----------
   function renderTimer() {
-    const name = state.members[state.currentIndex];
+    const name = state.playOrder[state.currentIndex];
     const color = state.colors[name] || "#fff";
     const isOvertime = state.remaining < 0;
 
@@ -793,7 +861,7 @@
     el.innerHTML = `
       <div class="timer-name" style="--name-chars:${name.length}; color:${color}">${name}</div>
       <div class="timer-clock ${isOvertime ? "overtime" : ""}">${formatTime(state.remaining)}</div>
-      <div class="timer-meta">Person ${state.currentIndex + 1} of ${state.members.length}${state.overtimeAdded ? ` · +${state.overtimeAdded}:00 overtime` : ""}</div>
+      <div class="timer-meta">Person ${state.currentIndex + 1} of ${state.playOrder.length}${state.overtimeAdded ? ` · +${state.overtimeAdded}:00 overtime` : ""}</div>
       ${state.paused ? `<div class="paused-banner">● Paused for Discussion</div>` : ""}
       <div class="btn-row">
         <button class="btn-over" id="overBtn">+1 Minute</button>
@@ -825,14 +893,14 @@
           if (state.remaining < 0) clockEl.classList.add("overtime");
         }
         if (metaEl) {
-          metaEl.textContent = `Person ${state.currentIndex + 1} of ${state.members.length}${state.overtimeAdded ? ` · +${state.overtimeAdded}:00 overtime` : ""}`;
+          metaEl.textContent = `Person ${state.currentIndex + 1} of ${state.playOrder.length}${state.overtimeAdded ? ` · +${state.overtimeAdded}:00 overtime` : ""}`;
         }
       }, 1000);
     }
   }
 
   function finishPerson() {
-    const name = state.members[state.currentIndex];
+    const name = state.playOrder[state.currentIndex];
     state.results.push({
       name,
       color: state.colors[name] || "#fff",
@@ -842,7 +910,7 @@
     });
 
     state.currentIndex += 1;
-    if (state.currentIndex >= state.members.length) {
+    if (state.currentIndex >= state.playOrder.length) {
       recordRun(state.team, state.results);
       state.screen = "summary";
     } else {
@@ -919,6 +987,8 @@
       state.members = [];
       state.colors = {};
       state.results = [];
+      state.enabled = {};
+      state.playOrder = [];
       render();
     });
   }
