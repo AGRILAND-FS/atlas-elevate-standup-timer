@@ -384,10 +384,10 @@
 <script>
 (() => {
   const TEAMS = {
-    "ELEVATE":      { color: "#7FDBFF", blockFirst: "Brian",            members: ["Brian", "Mary", "Amber", "Lori", "Jeremy", "Reagan", "Jen"], flexLast: { name: "Jen", maxSeconds: 5 * 60 } },
-    "MARKETING":    { color: "#FF6B6B", blockFirst: "Tony",             members: ["Jill", "Ashley", "Adam", "Christine", "Tony"] },
-    "ENERGY":       { color: "#FF7A1A", blockFirst: "Nicole",           members: ["Nicole", "Jessica", "Trina", "Heather", "Jeremy"] },
-    "PROJECT MGMT": { color: "#DFFF00", blockFirst: "Mark Christensen", members: ["Jeremy Gray", "Mark Christensen", "Nate Katzer", "Jen Ohrt"] },
+    "ELEVATE":      { color: "#7FDBFF", goFirst: "Brian",            members: ["Brian", "Mary", "Amber", "Lori", "Jeremy", "Reagan", "Jen"], flexLast: { name: "Jen", maxSeconds: 5 * 60 } },
+    "MARKETING":    { color: "#FF6B6B", goFirst: "Tony",             members: ["Jill", "Ashley", "Adam", "Christine", "Tony"] },
+    "ENERGY":       { color: "#FF7A1A", goFirst: "Nicole",           members: ["Nicole", "Jessica", "Trina", "Heather", "Jeremy"] },
+    "PROJECT MGMT": { color: "#DFFF00", goFirst: "Mark Christensen", members: ["Jeremy Gray", "Mark Christensen", "Nate Katzer", "Jen Ohrt"] },
   };
   const CUSTOM_COLOR = "#C0C0C0";
 
@@ -448,6 +448,16 @@
     if (s.length > 1 && s[0] === blockedName) {
       const swap = 1 + Math.floor(Math.random() * (s.length - 1));
       [s[0], s[swap]] = [s[swap], s[0]];
+    }
+    return s;
+  }
+
+  // Shuffle, but make sure `firstName` ends up first (if they're in the list).
+  function shuffleWithFirst(arr, firstName) {
+    const s = shuffle(arr);
+    const i = s.indexOf(firstName);
+    if (i > 0) {
+      [s[0], s[i]] = [s[i], s[0]];
     }
     return s;
   }
@@ -774,8 +784,8 @@
       const last = typedActive[typedActive.length - 1];
       order = shuffleCustomConstrained(active, first, last);
     } else {
-      const blocked = TEAMS[state.team]?.blockFirst;
-      order = blocked ? shuffleAvoidingFirst(active, blocked) : shuffle(active);
+      const first = TEAMS[state.team]?.goFirst;
+      order = first ? shuffleWithFirst(active, first) : shuffle(active);
       order = applyTeamPreferences(state.team, order);
     }
     state.playOrder = order;
