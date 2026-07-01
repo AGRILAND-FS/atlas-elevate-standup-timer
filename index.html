@@ -332,6 +332,63 @@
     padding: 3rem 0;
   }
 
+  /* Agenda screen (interstitial before the round starts) */
+  .agenda-screen { width: 100%; max-width: 900px; }
+  .agenda-screen h1 {
+    font-size: clamp(2.5rem, 6vw, 4rem);
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    margin-bottom: 2rem;
+    text-shadow: 0 0 30px rgba(255,255,255,0.4);
+  }
+  .agenda-card {
+    text-align: left;
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.25rem;
+    border: 2px solid var(--card-color, #333);
+    border-radius: 4px;
+    background: rgba(255,255,255,0.02);
+  }
+  .agenda-name {
+    font-size: clamp(1.4rem, 2.5vw, 2rem);
+    font-weight: 900;
+    color: var(--card-color, #fff);
+    text-shadow: 0 0 18px currentColor;
+    letter-spacing: 0.15em;
+    margin-bottom: 0.5rem;
+    line-height: 1.1;
+  }
+  .agenda-section-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--card-color, #888);
+    letter-spacing: 0.3em;
+    margin: 0.9rem 0 0.35rem;
+    text-transform: uppercase;
+    opacity: 0.85;
+  }
+  .agenda-items {
+    list-style: none;
+    padding-left: 1.5rem;
+  }
+  .agenda-items li {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(0.95rem, 1.5vw, 1.15rem);
+    color: #ddd;
+    margin-bottom: 0.35rem;
+    letter-spacing: 0.05em;
+    text-transform: none;
+    position: relative;
+    line-height: 1.5;
+  }
+  .agenda-items li::before {
+    content: "▸";
+    color: var(--card-color, #666);
+    position: absolute;
+    left: -1.2rem;
+    top: 0;
+  }
+
   /* Summary screen */
   .summary-screen { width: 100%; max-width: 900px; }
   .summary-screen h1 {
@@ -385,7 +442,39 @@
 (() => {
   const TEAMS = {
     "ELEVATE":            { color: "#7FDBFF", goFirst: "Brian",            members: ["Brian", "Mary", "Amber", "Lori", "Jeremy", "Reagan", "Jen"], flexLast: { name: "Jen", maxSeconds: 5 * 60 } },
-    "PREVIEW & PLANNING": { color: "#4ADE80", fixedOrder: true, perPersonSeconds: 10 * 60, members: ["Mary", "Jeremy", "Lori", "Amber", "Brian", "Reagan"] },
+    "PREVIEW & PLANNING": {
+      color: "#4ADE80",
+      fixedOrder: true,
+      perPersonSeconds: 10 * 60,
+      members: ["Mary", "Jeremy", "Lori", "Amber", "Brian", "Reagan"],
+      agendaTitle: "July 1, 2026 Agenda",
+      agenda: {
+        "Mary": {
+          preview: ["fun w/ LWCs"],
+          planning: ["energy opportunities, especially for lubes, DEF, etc."],
+        },
+        "Jeremy": {
+          preview: ["FP backend, route books, FP chrome extension (no XML because no JSON from FP yet)"],
+          planning: ["platform structure for reporting engine under the hood (shift away from Amazon Quick)"],
+        },
+        "Lori": {
+          preview: ["contracting stopgap (HTML report vs Laura, etc.), 95 manual refreshes"],
+          planning: ["customer report / interpretation (freed up to deep dive on the whys)"],
+        },
+        "Amber": {
+          preview: ["agfs.app login/admin, FP data flowing on 2/3 of objects needed in Agvance"],
+          planning: ["re-write ship-to API because of the GMK failures & SLA mismatch, which means customer API too, which adds other problems"],
+        },
+        "Brian": {
+          preview: ["new Account App (credit app), reality checks on monday.com"],
+          planning: ["discovery work for customer onboarding? multi-product?"],
+        },
+        "Reagan": {
+          preview: ["brief comment on LDAP (joint effort w/ IT)"],
+          planning: ["ERD & backup tool & presentation"],
+        },
+      },
+    },
     "MARKETING":          { color: "#FF6B6B", goFirst: "Tony",             members: ["Jill", "Ashley", "Adam", "Christine", "Tony"] },
     "ENERGY":             { color: "#FF7A1A", goFirst: "Nicole",           members: ["Nicole", "Jessica", "Trina", "Heather", "Jeremy"] },
     "PROJECT MGMT":       { color: "#DFFF00", goFirst: "Mark Christensen", members: ["Jeremy Gray", "Mark Christensen", "Nate Katzer", "Jen Ohrt"] },
@@ -595,6 +684,7 @@
     if (state.screen === "splash") renderSplash();
     else if (state.screen === "configure") renderConfigure();
     else if (state.screen === "start") renderStart();
+    else if (state.screen === "agenda") renderAgenda();
     else if (state.screen === "next") renderNext();
     else if (state.screen === "flash") renderFlash();
     else if (state.screen === "timer") renderTimer();
@@ -842,7 +932,52 @@
     state.playOrder = order;
     state.currentIndex = 0;
     state.results = [];
-    beginPerson();
+    if (TEAMS[state.team]?.agenda) {
+      state.screen = "agenda";
+      render();
+    } else {
+      beginPerson();
+    }
+  }
+
+  // ---------- Agenda (pre-round interstitial for teams with an agenda) ----------
+  function renderAgenda() {
+    const teamCfg = TEAMS[state.team] || {};
+    const agenda = teamCfg.agenda || {};
+    const c = teamColor();
+
+    const cards = state.playOrder.map(name => {
+      const entry = agenda[name] || {};
+      const color = state.colors[name] || "#fff";
+      const preview = (entry.preview || []).map(x => `<li>${x}</li>`).join("");
+      const planning = (entry.planning || []).map(x => `<li>${x}</li>`).join("");
+      return `
+        <div class="agenda-card" style="--card-color:${color}">
+          <div class="agenda-name">${name}</div>
+          ${preview ? `<div class="agenda-section-label">Preview</div><ul class="agenda-items">${preview}</ul>` : ""}
+          ${planning ? `<div class="agenda-section-label">Planning</div><ul class="agenda-items">${planning}</ul>` : ""}
+        </div>
+      `;
+    }).join("");
+
+    const el = document.createElement("div");
+    el.className = "agenda-screen";
+    el.innerHTML = `
+      <h1 style="color:${c}; text-shadow: 0 0 30px ${c};">${teamCfg.agendaTitle || "Agenda"}</h1>
+      ${cards}
+      <div class="btn-row">
+        <button class="btn-back" id="backBtn">Back</button>
+        <button class="ghost">Pause</button>
+        <button class="btn-done" id="beginBtn">Begin</button>
+      </div>
+    `;
+    app.appendChild(el);
+
+    document.getElementById("beginBtn").addEventListener("click", () => beginPerson());
+    document.getElementById("backBtn").addEventListener("click", () => {
+      state.screen = "start";
+      render();
+    });
   }
 
   function beginPerson() {
