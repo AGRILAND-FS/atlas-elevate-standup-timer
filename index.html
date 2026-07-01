@@ -173,7 +173,7 @@
   }
   .team-btn:hover .team-name { color: #000; text-shadow: none; }
   .team-btn:hover .team-members { color: #000; }
-  .custom-btn { width: 100%; }
+  /* .custom-btn tile now sits inside the grid alongside the presets */
 
   /* Configure (custom) screen */
   .config-screen { width: 100%; max-width: 700px; }
@@ -384,10 +384,11 @@
 <script>
 (() => {
   const TEAMS = {
-    "ELEVATE":      { color: "#7FDBFF", goFirst: "Brian",            members: ["Brian", "Mary", "Amber", "Lori", "Jeremy", "Reagan", "Jen"], flexLast: { name: "Jen", maxSeconds: 5 * 60 } },
-    "MARKETING":    { color: "#FF6B6B", goFirst: "Tony",             members: ["Jill", "Ashley", "Adam", "Christine", "Tony"] },
-    "ENERGY":       { color: "#FF7A1A", goFirst: "Nicole",           members: ["Nicole", "Jessica", "Trina", "Heather", "Jeremy"] },
-    "PROJECT MGMT": { color: "#DFFF00", goFirst: "Mark Christensen", members: ["Jeremy Gray", "Mark Christensen", "Nate Katzer", "Jen Ohrt"] },
+    "ELEVATE":            { color: "#7FDBFF", goFirst: "Brian",            members: ["Brian", "Mary", "Amber", "Lori", "Jeremy", "Reagan", "Jen"], flexLast: { name: "Jen", maxSeconds: 5 * 60 } },
+    "PREVIEW & PLANNING": { color: "#4ADE80", fixedOrder: true, perPersonSeconds: 10 * 60, members: ["Mary", "Jeremy", "Lori", "Amber", "Brian", "Reagan"] },
+    "MARKETING":          { color: "#FF6B6B", goFirst: "Tony",             members: ["Jill", "Ashley", "Adam", "Christine", "Tony"] },
+    "ENERGY":             { color: "#FF7A1A", goFirst: "Nicole",           members: ["Nicole", "Jessica", "Trina", "Heather", "Jeremy"] },
+    "PROJECT MGMT":       { color: "#DFFF00", goFirst: "Mark Christensen", members: ["Jeremy Gray", "Mark Christensen", "Nate Katzer", "Jen Ohrt"] },
   };
   const CUSTOM_COLOR = "#C0C0C0";
 
@@ -477,6 +478,50 @@
     return arr.slice().sort((a, b) => a.localeCompare(b));
   }
 
+  // ---------- Warning beeps (Web Audio) ----------
+  let audioCtx = null;
+  function getAudioContext() {
+    if (!audioCtx) {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) audioCtx = new AC();
+      } catch {}
+    }
+    return audioCtx;
+  }
+  function playBeep(frequency, duration = 0.2, volume = 0.12) {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    // Resume if suspended (some browsers park the context until interaction).
+    if (ctx.state === "suspended") { try { ctx.resume(); } catch {} }
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = frequency;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    // Gentle fade in / hold / fade out — no harsh clicks.
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(volume, now + 0.03);
+    gain.gain.setValueAtTime(volume, now + duration - 0.08);
+    gain.gain.linearRampToValueAtTime(0, now + duration);
+    osc.start(now);
+    osc.stop(now + duration + 0.02);
+  }
+  function playBeeps(frequency, count, spacingMs = 260) {
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => playBeep(frequency), i * spacingMs);
+    }
+  }
+  // Threshold (seconds remaining) -> pattern. Fires only when the person's
+  // allotted time is greater than the threshold, so it never fires at start.
+  function playWarningForThreshold(threshold) {
+    if (threshold === 300) playBeeps(523, 1);        // 5 min left: 1 mid tone (C5)
+    else if (threshold === 120) playBeeps(659, 2);   // 2 min left: 2 tones (E5)
+    else if (threshold === 60)  playBeeps(784, 3);   // 1 min left: 3 tones (G5)
+  }
+
   // ---------- Leaderboard persistence (localStorage) ----------
   function loadLeaderboard() {
     try {
@@ -559,12 +604,15 @@
 
   // ---------- Splash ----------
   function renderSplash() {
-    const teamButtons = Object.entries(TEAMS).map(([name, info]) => `
+    const teamButtons = Object.entries(TEAMS).map(([name, info]) => {
+      const perPerson = info.perPersonSeconds || PRESET_SECONDS;
+      return `
       <button class="team-btn" data-team="${name}" style="--team-color:${info.color}">
         <span class="team-name">${name}</span>
-        <span class="team-members">${info.members.length} people · 5:00 each</span>
+        <span class="team-members">${info.members.length} people · ${formatTime(perPerson)} each</span>
       </button>
-    `).join("");
+    `;
+    }).join("");
 
     const el = document.createElement("div");
     el.className = "splash-screen";
@@ -573,11 +621,11 @@
       <p class="subtitle">Choose your team</p>
       <div class="team-grid">
         ${teamButtons}
+        <button class="team-btn custom-btn" data-team="__custom__" style="--team-color:${CUSTOM_COLOR}">
+          <span class="team-name">+ Custom Group</span>
+          <span class="team-members">Up to 10 · scales to fit 30:00</span>
+        </button>
       </div>
-      <button class="team-btn custom-btn" data-team="__custom__" style="--team-color:${CUSTOM_COLOR}">
-        <span class="team-name">+ Custom Group</span>
-        <span class="team-members">Up to 10 people · scales to fit 30:00</span>
-      </button>
     `;
     app.appendChild(el);
 
@@ -601,7 +649,7 @@
   function selectPresetTeam(teamName) {
     state.team = teamName;
     state.members = TEAMS[teamName].members.slice();
-    state.secondsPerPerson = PRESET_SECONDS;
+    state.secondsPerPerson = TEAMS[teamName].perPersonSeconds || PRESET_SECONDS;
     initToggleStateAndColors();
     state.screen = "start";
     render();
@@ -783,6 +831,9 @@
       const first = typedActive[0];
       const last = typedActive[typedActive.length - 1];
       order = shuffleCustomConstrained(active, first, last);
+    } else if (TEAMS[state.team]?.fixedOrder) {
+      // Preserve the roster order exactly, skipping anyone toggled off.
+      order = state.members.filter(n => active.includes(n));
     } else {
       const first = TEAMS[state.team]?.goFirst;
       order = first ? shuffleWithFirst(active, first) : shuffle(active);
@@ -896,6 +947,13 @@
       state.intervalId = setInterval(() => {
         state.remaining -= 1;
         state.elapsed += 1;
+        // Warning beeps: fire only when the person's allotted time exceeded
+        // this threshold, so short slots never trigger the 5-min warning etc.
+        [300, 120, 60].forEach(t => {
+          if (state.remaining === t && state.currentAllotted > t) {
+            playWarningForThreshold(t);
+          }
+        });
         const clockEl = app.querySelector(".timer-clock");
         const metaEl = app.querySelector(".timer-meta");
         if (clockEl) {
