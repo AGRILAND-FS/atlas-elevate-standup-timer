@@ -331,6 +331,43 @@
     padding: 3rem 0;
   }
 
+  /* Light-theme overrides used while the agenda is on screen */
+  body.light {
+    background: #fff;
+    color: #111;
+  }
+  body.light .agenda-screen h1 {
+    color: #111 !important;
+    text-shadow: none !important;
+  }
+  body.light .agenda-card {
+    background: #fff;
+    border: 1px solid #e2e2e2;
+    border-left: 6px solid var(--card-color);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  }
+  body.light .agenda-name {
+    color: #111;
+    text-shadow: none;
+  }
+  body.light .agenda-section-label { color: #666; opacity: 1; }
+  body.light .agenda-items li { color: #222; }
+  body.light .agenda-items li::before { color: var(--card-color); }
+  body.light button {
+    color: #333;
+    border-color: #333;
+    background: transparent;
+  }
+  body.light button:hover:not(:disabled) {
+    background: #333;
+    color: #fff;
+    box-shadow: none;
+  }
+  body.light button.btn-back { color: #888; border-color: #bbb; }
+  body.light button.btn-back:hover:not(:disabled) { background: #666; color: #fff; box-shadow: none; }
+  body.light button.btn-done { color: #16a34a; border-color: #16a34a; }
+  body.light button.btn-done:hover:not(:disabled) { background: #16a34a; color: #fff; box-shadow: 0 2px 12px rgba(22,163,74,0.35); }
+
   /* Agenda screen (interstitial before the round starts) */
   .agenda-screen { width: 100%; max-width: 900px; }
   .agenda-screen h1 {
@@ -680,6 +717,7 @@
   function render() {
     clearTimers();
     app.innerHTML = "";
+    document.body.classList.toggle("light", state.screen === "agenda");
     if (state.screen === "splash") renderSplash();
     else if (state.screen === "configure") renderConfigure();
     else if (state.screen === "start") renderStart();
