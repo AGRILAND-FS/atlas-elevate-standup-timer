@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%8F%B1%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800;900&family=Share+Tech+Mono&family=Merriweather:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -368,61 +368,79 @@
   body.light button.btn-done { color: #16a34a; border-color: #16a34a; }
   body.light button.btn-done:hover:not(:disabled) { background: #16a34a; color: #fff; box-shadow: 0 2px 12px rgba(22,163,74,0.35); }
 
-  /* Agenda screen (interstitial before the round starts) */
-  .agenda-screen { width: 100%; max-width: 900px; }
-  .agenda-screen h1 {
-    font-size: clamp(2.5rem, 6vw, 4rem);
-    font-weight: 900;
-    letter-spacing: 0.1em;
-    margin-bottom: 2rem;
-    text-shadow: 0 0 30px rgba(255,255,255,0.4);
-  }
-  .agenda-card {
-    text-align: left;
-    padding: 1.5rem 2rem;
-    margin-bottom: 1.25rem;
-    border: 2px solid var(--card-color, #333);
-    border-radius: 4px;
-    background: rgba(255,255,255,0.02);
-  }
-  .agenda-name {
-    font-size: clamp(1.4rem, 2.5vw, 2rem);
-    font-weight: 900;
-    color: var(--card-color, #fff);
-    text-shadow: 0 0 18px currentColor;
-    letter-spacing: 0.15em;
-    margin-bottom: 0.5rem;
-    line-height: 1.1;
-  }
-  .agenda-section-label {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 0.9rem;
-    color: var(--card-color, #888);
-    letter-spacing: 0.3em;
-    margin: 0.9rem 0 0.35rem;
-    text-transform: uppercase;
-    opacity: 0.85;
-  }
-  .agenda-items {
-    list-style: none;
-    padding-left: 1.5rem;
-  }
-  .agenda-items li {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: clamp(0.95rem, 1.5vw, 1.15rem);
-    color: #ddd;
-    margin-bottom: 0.35rem;
-    letter-spacing: 0.05em;
+  /* Agenda screen — newspaper layout, always renders on white */
+  .agenda-screen {
+    width: 100%;
+    max-width: 1100px;
+    font-family: 'Merriweather', Georgia, "Times New Roman", serif;
     text-transform: none;
-    position: relative;
-    line-height: 1.5;
+    letter-spacing: 0;
+    text-align: left;
   }
-  .agenda-items li::before {
-    content: "▸";
-    color: var(--card-color, #666);
-    position: absolute;
-    left: -1.2rem;
-    top: 0;
+  .agenda-title {
+    font-family: 'Merriweather', Georgia, "Times New Roman", serif;
+    font-size: clamp(2.75rem, 6vw, 5rem);
+    font-weight: 900;
+    color: #111;
+    text-align: center;
+    letter-spacing: 0;
+    text-transform: none;
+    line-height: 1.1;
+    padding-bottom: 0.5rem;
+    margin-bottom: 2.5rem;
+    border-bottom: 4px double #111;
+  }
+  .agenda-pass { margin-bottom: 3rem; }
+  .agenda-pass-label {
+    font-family: 'Merriweather', Georgia, "Times New Roman", serif;
+    font-size: clamp(1.75rem, 3vw, 2.75rem);
+    font-weight: 900;
+    color: #111;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    padding-bottom: 0.35rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid #111;
+  }
+  .agenda-entry {
+    margin-bottom: 1.75rem;
+    page-break-inside: avoid;
+  }
+  .agenda-entry-name {
+    font-family: 'Merriweather', Georgia, "Times New Roman", serif;
+    font-size: clamp(1.5rem, 2.4vw, 2rem);
+    font-weight: 900;
+    color: #111;
+    letter-spacing: 0;
+    text-transform: none;
+    line-height: 1.2;
+    margin-bottom: 0.35rem;
+    display: flex;
+    align-items: center;
+  }
+  .agenda-entry-name::before {
+    content: "";
+    display: inline-block;
+    width: 0.55em;
+    height: 0.55em;
+    background: var(--dot-color, #111);
+    border-radius: 2px;
+    margin-right: 0.55em;
+    flex-shrink: 0;
+  }
+  .agenda-entry-items {
+    list-style: disc;
+    padding-left: 2.5rem;
+    margin-left: 0.75em; /* align under the name text past the dot */
+  }
+  .agenda-entry-items li {
+    font-family: 'Merriweather', Georgia, "Times New Roman", serif;
+    font-size: clamp(1.15rem, 1.7vw, 1.5rem);
+    color: #222;
+    line-height: 1.5;
+    letter-spacing: 0;
+    text-transform: none;
+    margin-bottom: 0.35rem;
   }
 
   /* Summary screen */
@@ -485,30 +503,23 @@
       members: ["Mary", "Jeremy", "Lori", "Amber", "Brian", "Reagan"],
       agendaTitle: "July 1, 2026 Agenda",
       agenda: {
-        "Mary": {
-          preview: ["fun w/ LWCs"],
-          planning: ["energy opportunities, especially for lubes, DEF, etc."],
-        },
-        "Jeremy": {
-          preview: ["FP backend, route books, FP chrome extension (no XML because no JSON from FP yet)"],
-          planning: ["platform structure for reporting engine under the hood (shift away from Amazon Quick)"],
-        },
-        "Lori": {
-          preview: ["contracting stopgap (HTML report vs Laura, etc.), 95 manual refreshes"],
-          planning: ["customer report / interpretation (freed up to deep dive on the whys)"],
-        },
-        "Amber": {
-          preview: ["agfs.app login/admin, FP data flowing on 2/3 of objects needed in Agvance"],
-          planning: ["re-write ship-to API because of the GMK failures & SLA mismatch, which means customer API too, which adds other problems"],
-        },
-        "Brian": {
-          preview: ["new Account App (credit app), reality checks on monday.com"],
-          planning: ["discovery work for customer onboarding? multi-product?"],
-        },
-        "Reagan": {
-          preview: ["brief comment on LDAP (joint effort w/ IT)"],
-          planning: ["ERD & backup tool & presentation"],
-        },
+        // Two passes with independent ordering — each entry is { name, items }.
+        preview: [
+          { name: "Mary",   items: ["fun w/ LWCs"] },
+          { name: "Jeremy", items: ["FP backend, route books, FP chrome extension (no XML because no JSON from FP yet)"] },
+          { name: "Lori",   items: ["contracting stopgap (HTML report vs Laura, etc.), 95 manual refreshes"] },
+          { name: "Amber",  items: ["agfs.app login/admin, FP data flowing on 2/3 of objects needed in Agvance"] },
+          { name: "Brian",  items: ["new Account App (credit app), reality checks on monday.com"] },
+          { name: "Reagan", items: ["brief comment on LDAP (joint effort w/ IT)"] },
+        ],
+        planning: [
+          { name: "Mary",   items: ["energy opportunities, especially for lubes, DEF, etc."] },
+          { name: "Jeremy", items: ["platform structure for reporting engine under the hood (shift away from Amazon Quick)"] },
+          { name: "Lori",   items: ["customer report / interpretation (freed up to deep dive on the whys)"] },
+          { name: "Amber",  items: ["re-write ship-to API because of the GMK failures & SLA mismatch, which means customer API too, which adds other problems"] },
+          { name: "Brian",  items: ["discovery work for customer onboarding? multi-product?"] },
+          { name: "Reagan", items: ["ERD & backup tool & presentation"] },
+        ],
       },
     },
     "MARKETING":          { color: "#FF6B6B", goFirst: "Tony",             members: ["Jill", "Ashley", "Adam", "Christine", "Tony"] },
@@ -981,18 +992,31 @@
   function renderAgenda() {
     const teamCfg = TEAMS[state.team] || {};
     const agenda = teamCfg.agenda || {};
-    const c = teamColor();
 
-    const cards = state.playOrder.map(name => {
-      const entry = agenda[name] || {};
-      const color = state.colors[name] || "#fff";
-      const preview = (entry.preview || []).map(x => `<li>${x}</li>`).join("");
-      const planning = (entry.planning || []).map(x => `<li>${x}</li>`).join("");
+    const passes = [
+      { label: "Preview",  entries: agenda.preview  || [] },
+      { label: "Planning", entries: agenda.planning || [] },
+    ];
+
+    const activeNames = new Set(state.playOrder);
+
+    const passHtml = passes.map(pass => {
+      const entriesHtml = pass.entries
+        .filter(e => activeNames.has(e.name))
+        .map(e => {
+          const color = state.colors[e.name] || "#111";
+          const items = (e.items || []).map(x => `<li>${x}</li>`).join("");
+          return `
+            <div class="agenda-entry">
+              <div class="agenda-entry-name" style="--dot-color:${color}">${e.name}</div>
+              ${items ? `<ul class="agenda-entry-items">${items}</ul>` : ""}
+            </div>
+          `;
+        }).join("");
       return `
-        <div class="agenda-card" style="--card-color:${color}">
-          <div class="agenda-name">${name}</div>
-          ${preview ? `<div class="agenda-section-label">Preview</div><ul class="agenda-items">${preview}</ul>` : ""}
-          ${planning ? `<div class="agenda-section-label">Planning</div><ul class="agenda-items">${planning}</ul>` : ""}
+        <div class="agenda-pass">
+          <div class="agenda-pass-label">${pass.label}</div>
+          ${entriesHtml}
         </div>
       `;
     }).join("");
@@ -1000,8 +1024,8 @@
     const el = document.createElement("div");
     el.className = "agenda-screen";
     el.innerHTML = `
-      <h1 style="color:${c}; text-shadow: 0 0 30px ${c};">${teamCfg.agendaTitle || "Agenda"}</h1>
-      ${cards}
+      <h1 class="agenda-title">${teamCfg.agendaTitle || "Agenda"}</h1>
+      ${passHtml}
       <div class="btn-row">
         <button class="btn-back" id="backBtn">Back</button>
         <button class="ghost">Pause</button>
