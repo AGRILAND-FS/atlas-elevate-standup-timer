@@ -392,6 +392,10 @@
   }
   .agenda-pass { margin-bottom: 3rem; }
   .agenda-pass-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
     font-family: 'Merriweather', Georgia, "Times New Roman", serif;
     font-size: clamp(1.75rem, 3vw, 2.75rem);
     font-weight: 900;
@@ -401,7 +405,24 @@
     padding-bottom: 0.35rem;
     margin-bottom: 1.5rem;
     border-bottom: 2px solid #111;
+    line-height: 1.1;
   }
+  .agenda-pass-label > span:first-child { flex: 1; min-width: 0; }
+  .agenda-pass-btn {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(0.85rem, 1.3vw, 1.1rem);
+    padding: 0.55rem 1.4rem;
+    min-width: 0;
+    letter-spacing: 0.2em;
+    flex-shrink: 0;
+  }
+  .agenda-pass.inactive .agenda-pass-label {
+    color: #888;
+    border-bottom-color: #ccc;
+  }
+  .agenda-pass.inactive .agenda-entry-name { color: #888; }
+  .agenda-pass.inactive .agenda-entry-name::before { opacity: 0.4; }
+  .agenda-pass.inactive .agenda-entry-items li { color: #999; }
   .agenda-entry {
     margin-bottom: 1.75rem;
     page-break-inside: avoid;
@@ -499,7 +520,7 @@
     "PREVIEW & PLANNING": {
       color: "#4ADE80",
       fixedOrder: true,
-      perPersonSeconds: 10 * 60,
+      perPersonSeconds: 5 * 60,
       members: ["Mary", "Jeremy", "Lori", "Amber", "Brian", "Reagan"],
       agendaTitle: "July 1, 2026 Agenda",
       agenda: {
@@ -565,6 +586,7 @@
     flashTimeoutId: null,
     customDraft: "",       // remembered textarea content
     returnTo: null,        // screen to return to from leaderboard
+    pass: 1,               // 1 = preview pass, 2 = planning pass (for multi-pass teams)
     currentAllotted: 0,    // allotted seconds for the person currently up
     enabled: {},           // { name: bool } — toggle state on the start screen
     playOrder: [],         // shuffled, filtered-by-enabled order for the current round
@@ -672,15 +694,25 @@
     if (!team || team === "CUSTOM") return; // custom groups don't accumulate
     const data = loadLeaderboard();
     const teamData = data[team] || {};
+    // Aggregate per-name first so a multi-pass session counts as one run per
+    // person, not one per appearance across passes.
+    const perName = {};
     results.forEach(r => {
-      if (r.elapsed < ABSENT_THRESHOLD) return; // absent — don't pollute totals
-      const entry = teamData[r.name] || { saved: 0, elapsed: 0, allotted: 0, runs: 0, lastSeen: null };
-      entry.saved += (r.allotted - r.elapsed);
-      entry.elapsed += r.elapsed;
-      entry.allotted += r.allotted;
+      if (r.elapsed < ABSENT_THRESHOLD) return; // absent — skip
+      if (!perName[r.name]) perName[r.name] = { saved: 0, elapsed: 0, allotted: 0 };
+      perName[r.name].saved += (r.allotted - r.elapsed);
+      perName[r.name].elapsed += r.elapsed;
+      perName[r.name].allotted += r.allotted;
+    });
+    const stamp = new Date().toISOString();
+    Object.entries(perName).forEach(([name, agg]) => {
+      const entry = teamData[name] || { saved: 0, elapsed: 0, allotted: 0, runs: 0, lastSeen: null };
+      entry.saved += agg.saved;
+      entry.elapsed += agg.elapsed;
+      entry.allotted += agg.allotted;
       entry.runs += 1;
-      entry.lastSeen = new Date().toISOString();
-      teamData[r.name] = entry;
+      entry.lastSeen = stamp;
+      teamData[name] = entry;
     });
     data[team] = teamData;
     persistLeaderboard(data);
@@ -785,11 +817,17 @@
   }
 
   function selectPresetTeam(teamName) {
+    const cfg = TEAMS[teamName];
     state.team = teamName;
-    state.members = TEAMS[teamName].members.slice();
-    state.secondsPerPerson = TEAMS[teamName].perPersonSeconds || PRESET_SECONDS;
+    state.members = cfg.members.slice();
+    state.secondsPerPerson = cfg.perPersonSeconds || PRESET_SECONDS;
     initToggleStateAndColors();
-    state.screen = "start";
+    state.pass = 1;
+    state.results = [];
+    // Multi-pass agenda teams open the agenda first so the room can preview
+    // the plan before the operator finalizes toggles on the start screen.
+    const isMultiPass = cfg.agenda && cfg.agenda.preview && cfg.agenda.planning;
+    state.screen = isMultiPass ? "agenda" : "start";
     render();
   }
 
@@ -962,6 +1000,9 @@
     const active = state.members.filter(n => state.enabled[n] !== false);
     if (active.length === 0) return;
 
+    const cfg = TEAMS[state.team];
+    const isMultiPass = cfg?.agenda && cfg.agenda.preview && cfg.agenda.planning;
+
     let order;
     if (state.team === "CUSTOM") {
       // Constrain by the typed input order, but only for those who are still enabled.
@@ -969,39 +1010,52 @@
       const first = typedActive[0];
       const last = typedActive[typedActive.length - 1];
       order = shuffleCustomConstrained(active, first, last);
-    } else if (TEAMS[state.team]?.fixedOrder) {
+    } else if (isMultiPass) {
+      // Order comes from the agenda list for the current pass.
+      const passKey = state.pass === 2 ? "planning" : "preview";
+      order = cfg.agenda[passKey].map(e => e.name).filter(n => active.includes(n));
+    } else if (cfg?.fixedOrder) {
       // Preserve the roster order exactly, skipping anyone toggled off.
       order = state.members.filter(n => active.includes(n));
     } else {
-      const first = TEAMS[state.team]?.goFirst;
+      const first = cfg?.goFirst;
       order = first ? shuffleWithFirst(active, first) : shuffle(active);
       order = applyTeamPreferences(state.team, order);
     }
     state.playOrder = order;
     state.currentIndex = 0;
-    state.results = [];
-    if (TEAMS[state.team]?.agenda) {
-      state.screen = "agenda";
-      render();
-    } else {
+    // Multi-pass teams already showed the agenda before Start, so head
+    // straight into the round when the operator clicks the green button.
+    if (isMultiPass) {
+      state.results = state.results || [];
       beginPerson();
+    } else {
+      state.results = [];
+      if (cfg?.agenda) {
+        state.screen = "agenda";
+        render();
+      } else {
+        beginPerson();
+      }
     }
   }
 
-  // ---------- Agenda (pre-round interstitial for teams with an agenda) ----------
+  // ---------- Agenda (interstitial before each pass on multi-pass teams) ----------
   function renderAgenda() {
     const teamCfg = TEAMS[state.team] || {};
     const agenda = teamCfg.agenda || {};
 
-    const passes = [
-      { label: "Preview",  entries: agenda.preview  || [] },
-      { label: "Planning", entries: agenda.planning || [] },
-    ];
+    // Which pass is active determines top vs bottom ordering.
+    const preview  = { key: "preview",  label: "Preview",  entries: agenda.preview  || [] };
+    const planning = { key: "planning", label: "Planning", entries: agenda.planning || [] };
+    const activePass   = state.pass === 2 ? planning : preview;
+    const inactivePass = state.pass === 2 ? preview  : planning;
 
-    const activeNames = new Set(state.playOrder);
+    // Show entries filtered by current enabled state so absent people don't clutter.
+    const activeNames = new Set(state.members.filter(n => state.enabled[n] !== false));
 
-    const passHtml = passes.map(pass => {
-      const entriesHtml = pass.entries
+    function renderEntries(entries) {
+      return entries
         .filter(e => activeNames.has(e.name))
         .map(e => {
           const color = state.colors[e.name] || "#111";
@@ -1013,30 +1067,48 @@
             </div>
           `;
         }).join("");
-      return `
-        <div class="agenda-pass">
-          <div class="agenda-pass-label">${pass.label}</div>
-          ${entriesHtml}
+    }
+
+    const activeHtml = `
+      <div class="agenda-pass active">
+        <div class="agenda-pass-label">
+          <span>${activePass.label}</span>
+          <button class="btn-done agenda-pass-btn" id="beginBtn">Begin</button>
         </div>
-      `;
-    }).join("");
+        ${renderEntries(activePass.entries)}
+      </div>
+    `;
+    const inactiveHtml = `
+      <div class="agenda-pass inactive">
+        <div class="agenda-pass-label">
+          <span>${inactivePass.label}</span>
+          <button class="btn-back agenda-pass-btn" id="backBtn">Back</button>
+        </div>
+        ${renderEntries(inactivePass.entries)}
+      </div>
+    `;
 
     const el = document.createElement("div");
     el.className = "agenda-screen";
     el.innerHTML = `
       <h1 class="agenda-title">${teamCfg.agendaTitle || "Agenda"}</h1>
-      ${passHtml}
-      <div class="btn-row">
-        <button class="btn-back" id="backBtn">Back</button>
-        <button class="ghost">Pause</button>
-        <button class="btn-done" id="beginBtn">Begin</button>
-      </div>
+      ${activeHtml}
+      ${inactiveHtml}
     `;
     app.appendChild(el);
 
-    document.getElementById("beginBtn").addEventListener("click", () => beginPerson());
+    document.getElementById("beginBtn").addEventListener("click", () => {
+      if (state.pass === 2) {
+        // Pass 2 begins immediately — toggles are already set from pass 1.
+        beginPerson();
+      } else {
+        // Pass 1 flow: agenda -> start (toggles) -> round.
+        state.screen = "start";
+        render();
+      }
+    });
     document.getElementById("backBtn").addEventListener("click", () => {
-      state.screen = "start";
+      state.screen = "splash";
       render();
     });
   }
@@ -1175,8 +1247,19 @@
 
     state.currentIndex += 1;
     if (state.currentIndex >= state.playOrder.length) {
-      recordRun(state.team, state.results);
-      state.screen = "summary";
+      const cfg = TEAMS[state.team];
+      const isMultiPass = cfg?.agenda && cfg.agenda.preview && cfg.agenda.planning;
+      if (isMultiPass && state.pass === 1) {
+        // First pass done — circle back to the agenda flipped for pass 2.
+        state.pass = 2;
+        const active = state.members.filter(n => state.enabled[n] !== false);
+        state.playOrder = cfg.agenda.planning.map(e => e.name).filter(n => active.includes(n));
+        state.currentIndex = 0;
+        state.screen = "agenda";
+      } else {
+        recordRun(state.team, state.results);
+        state.screen = "summary";
+      }
     } else {
       state.screen = "next";
     }
@@ -1185,8 +1268,22 @@
 
   // ---------- Summary ----------
   function renderSummary() {
-    const present = state.results.filter(r => r.elapsed >= ABSENT_THRESHOLD);
-    const absent = state.results.filter(r => r.elapsed < ABSENT_THRESHOLD);
+    // Aggregate by person so multi-pass rounds show one row per name with
+    // combined totals — a person present for pass 1 but absent for pass 2
+    // still counts as present overall.
+    const aggMap = new Map();
+    state.results.forEach(r => {
+      const cur = aggMap.get(r.name) || { name: r.name, color: r.color, elapsed: 0, allotted: 0, overtimeAdded: 0 };
+      cur.elapsed += r.elapsed;
+      cur.allotted += r.allotted;
+      cur.overtimeAdded += (r.overtimeAdded || 0);
+      // Keep the last-seen color for the name.
+      cur.color = r.color;
+      aggMap.set(r.name, cur);
+    });
+    const aggregated = Array.from(aggMap.values());
+    const present = aggregated.filter(r => r.elapsed >= ABSENT_THRESHOLD);
+    const absent = aggregated.filter(r => r.elapsed < ABSENT_THRESHOLD);
 
     const total = present.reduce((sum, r) => sum + r.elapsed, 0);
     const totalAllotted = present.reduce((sum, r) => sum + r.allotted, 0);
